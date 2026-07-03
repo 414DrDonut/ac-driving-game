@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Highway Dodging Arcade</title>
+    <title>3D Highway Dodger</title>
     <style>
         * {
             margin: 0;
@@ -19,8 +19,6 @@
 
         canvas {
             display: block;
-            width: 100%;
-            height: 100vh;
         }
 
         #ui {
@@ -30,10 +28,6 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            font-size: 24px;
-            color: #0f0;
-            text-shadow: 0 0 10px #0f0;
-            font-weight: bold;
         }
 
         #hud {
@@ -43,6 +37,10 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            font-size: 24px;
+            color: #0f0;
+            text-shadow: 0 0 10px #0f0;
+            font-weight: bold;
         }
 
         .hud-item {
@@ -135,10 +133,6 @@
             text-shadow: 0 0 10px #0f0;
         }
 
-        #nameInputScreen input::placeholder {
-            color: #0a0;
-        }
-
         #nameInputScreen button {
             margin-top: 30px;
             padding: 15px 40px;
@@ -150,12 +144,6 @@
             font-weight: bold;
             border-radius: 5px;
             pointer-events: auto;
-            transition: all 0.3s;
-        }
-
-        #nameInputScreen button:hover {
-            background: #0a0;
-            transform: scale(1.05);
         }
 
         #pauseScreen {
@@ -180,15 +168,7 @@
         #pauseScreen h1 {
             color: #ff0;
             font-size: 64px;
-            margin-bottom: 30px;
             text-shadow: 0 0 20px #ff0;
-        }
-
-        #pauseScreen p {
-            color: #0f0;
-            font-size: 24px;
-            margin: 10px;
-            text-shadow: 0 0 10px #0f0;
         }
 
         .boost-bar {
@@ -223,8 +203,6 @@
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
-    
     <div id="ui">
         <div id="hud">
             <div class="hud-item">Player: <span id="playerName">-</span></div>
@@ -251,14 +229,13 @@
     </div>
 
     <div id="nameInputScreen">
-        <h1>🏁 HIGHWAY DODGER 🏁</h1>
+        <h1>🏁 3D HIGHWAY DODGER 🏁</h1>
         <input type="text" id="playerNameInput" placeholder="Enter your name..." maxlength="15">
         <button onclick="startGame()">START GAME</button>
     </div>
 
     <div id="pauseScreen">
         <h1>⏸ PAUSED ⏸</h1>
-        <p>Press P to Resume</p>
     </div>
 
     <div id="gameOverScreen">
@@ -270,19 +247,57 @@
         <button onclick="location.reload()">PLAY AGAIN</button>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Sky blue
+        scene.fog = new THREE.Fog(0x87ceeb, 500, 1000);
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+        camera.position.set(0, 10, 30);
+        camera.lookAt(0, 5, 0);
 
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        });
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+        document.body.appendChild(renderer.domElement);
 
-        // Game State
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(100, 100, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.left = -200;
+        directionalLight.shadow.camera.right = 200;
+        directionalLight.shadow.camera.top = 200;
+        directionalLight.shadow.camera.bottom = -200;
+        scene.add(directionalLight);
+
+        // Road
+        const roadGeometry = new THREE.PlaneGeometry(80, 2000);
+        const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const road = new THREE.Mesh(roadGeometry, roadMaterial);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = 0;
+        road.receiveShadow = true;
+        scene.add(road);
+
+        // Lane lines
+        for (let i = 0; i < 100; i++) {
+            const lineGeometry = new THREE.PlaneGeometry(2, 10);
+            const lineMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+            const line = new THREE.Mesh(lineGeometry, lineMaterial);
+            line.rotation.x = -Math.PI / 2;
+            line.position.y = 0.01;
+            line.position.z = i * 20 - 500;
+            scene.add(line);
+        }
+
+        // Game state
         let gameState = {
             playerName: '',
             score: 0,
@@ -294,18 +309,17 @@
             maxBoosts: 3
         };
 
-        // Player
-        const player = {
-            x: canvas.width / 2,
-            y: canvas.height - 100,
-            width: 50,
-            height: 80,
-            speed: 6,
-            boosting: false,
-            boostTimer: 0
-        };
+        // Player car
+        const playerCar = createCar(0xffff00);
+        playerCar.position.set(0, 2, 30);
+        playerCar.castShadow = true;
+        scene.add(playerCar);
 
-        // Cars (enemies)
+        let playerVelocity = 0;
+        let playerBoosting = false;
+        let playerBoostTimer = 0;
+
+        // Traffic cars
         let cars = [];
         let carIdCounter = 0;
 
@@ -326,8 +340,8 @@
             if (e.key === ' ') {
                 e.preventDefault();
                 if (gameState.boosts > 0 && gameState.gameRunning && !gameState.paused) {
-                    player.boosting = true;
-                    player.boostTimer = 150;
+                    playerBoosting = true;
+                    playerBoostTimer = 150;
                     gameState.boosts--;
                     updateBoostUI();
                 }
@@ -337,6 +351,78 @@
         window.addEventListener('keyup', (e) => {
             keys[e.key.toLowerCase()] = false;
         });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function createCar(color) {
+            const carGroup = new THREE.Group();
+
+            // Body
+            const bodyGeometry = new THREE.BoxGeometry(3, 2, 7);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: color, metalness: 0.7, roughness: 0.3 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            carGroup.add(body);
+
+            // Cabin
+            const cabinGeometry = new THREE.BoxGeometry(2.5, 1.5, 3);
+            const cabinMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.5 });
+            const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+            cabin.position.y = 2.2;
+            cabin.position.z = -0.5;
+            cabin.castShadow = true;
+            cabin.receiveShadow = true;
+            carGroup.add(cabin);
+
+            // Windows
+            const windowGeometry = new THREE.BoxGeometry(0.5, 1, 1.5);
+            const windowMaterial = new THREE.MeshStandardMaterial({ color: 0x4488ff, metalness: 0.9, roughness: 0.1 });
+            
+            const window1 = new THREE.Mesh(windowGeometry, windowMaterial);
+            window1.position.set(-1.3, 2.5, -0.5);
+            carGroup.add(window1);
+
+            const window2 = new THREE.Mesh(windowGeometry, windowMaterial);
+            window2.position.set(1.3, 2.5, -0.5);
+            carGroup.add(window2);
+
+            // Wheels
+            const wheels = [];
+            for (let i = 0; i < 4; i++) {
+                const wheelGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 16);
+                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.5 });
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.x = i < 2 ? -1.5 : 1.5;
+                wheel.position.y = 0.8;
+                wheel.position.z = i % 2 === 0 ? -2 : 2;
+                wheel.castShadow = true;
+                wheel.receiveShadow = true;
+                carGroup.add(wheel);
+                wheels.push(wheel);
+            }
+
+            // Headlights
+            const headlightGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+            const headlightMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00 });
+            
+            const headlight1 = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlight1.position.set(-1, 0.8, 3.5);
+            carGroup.add(headlight1);
+
+            const headlight2 = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlight2.position.set(1, 0.8, 3.5);
+            carGroup.add(headlight2);
+
+            carGroup.wheels = wheels;
+            return carGroup;
+        }
 
         function startGame() {
             const nameInput = document.getElementById('playerNameInput').value.trim();
@@ -376,61 +462,90 @@
         }
 
         function spawnCar() {
-            const lanes = [100, 250, 400, 550, 700];
+            const lanes = [-15, -5, 5, 15];
             const lane = lanes[Math.floor(Math.random() * lanes.length)];
-            const speed = 3 + Math.random() * 4 + (gameState.time / 60);
+            const color = Math.random() > 0.5 ? 0xff0000 : 0x0000ff;
+            const speed = 0.3 + Math.random() * 0.4 + (gameState.time / 300);
 
-            cars.push({
+            const car = createCar(color);
+            car.position.set(lane, 2, -400);
+            car.castShadow = true;
+            car.userData = {
                 id: carIdCounter++,
-                x: lane,
-                y: -100,
-                width: 50,
-                height: 80,
                 speed: speed,
-                color: `hsl(${Math.random() * 360}, 100%, 50%)`
-            });
+                scored: false
+            };
+            scene.add(car);
+            cars.push(car);
         }
 
         function updatePlayer() {
-            const moveSpeed = player.boosting ? player.speed * 2.5 : player.speed;
+            const moveSpeed = playerBoosting ? 0.5 : 0.3;
 
             if (keys['arrowleft'] || keys['a']) {
-                player.x -= moveSpeed;
+                playerCar.position.x -= moveSpeed;
             }
             if (keys['arrowright'] || keys['d']) {
-                player.x += moveSpeed;
+                playerCar.position.x += moveSpeed;
             }
 
-            player.x = Math.max(50, Math.min(canvas.width - 50, player.x));
+            playerCar.position.x = Math.max(-30, Math.min(30, playerCar.position.x));
 
-            if (player.boosting) {
-                player.boostTimer--;
-                if (player.boostTimer <= 0) {
-                    player.boosting = false;
+            // Rotate car based on movement
+            if (keys['arrowleft'] || keys['a']) {
+                playerCar.rotation.z = 0.2;
+            } else if (keys['arrowright'] || keys['d']) {
+                playerCar.rotation.z = -0.2;
+            } else {
+                playerCar.rotation.z *= 0.9;
+            }
+
+            if (playerBoosting) {
+                playerBoostTimer--;
+                if (playerBoostTimer <= 0) {
+                    playerBoosting = false;
                 }
             }
+
+            // Update camera to follow player
+            camera.position.x = playerCar.position.x * 0.5;
+            camera.position.z = playerCar.position.z + 30;
+            camera.lookAt(playerCar.position.x, 5, playerCar.position.z - 10);
         }
 
         function updateCars() {
             for (let i = cars.length - 1; i >= 0; i--) {
-                cars[i].y += cars[i].speed;
+                cars[i].position.z += cars[i].userData.speed;
 
-                if (cars[i].y > canvas.height) {
+                // Rotate wheels
+                if (cars[i].wheels) {
+                    for (let wheel of cars[i].wheels) {
+                        wheel.rotation.x += cars[i].userData.speed / 0.8;
+                    }
+                }
+
+                if (cars[i].position.z > playerCar.position.z + 50) {
+                    if (!cars[i].userData.scored) {
+                        gameState.score += 10 * gameState.multiplier;
+                        gameState.multiplier = Math.min(2.0, gameState.multiplier + 0.05);
+                        cars[i].userData.scored = true;
+                    }
+                }
+
+                if (cars[i].position.z > 100) {
+                    scene.remove(cars[i]);
                     cars.splice(i, 1);
-                    gameState.score += 10 * gameState.multiplier;
-                    gameState.multiplier = Math.min(2.0, gameState.multiplier + 0.05);
                 }
             }
         }
 
         function checkCollisions() {
             for (let car of cars) {
-                if (
-                    player.x < car.x + car.width &&
-                    player.x + player.width > car.x &&
-                    player.y < car.y + car.height &&
-                    player.y + player.height > car.y
-                ) {
+                const dx = playerCar.position.x - car.position.x;
+                const dz = playerCar.position.z - car.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+
+                if (distance < 4) {
                     endGame();
                 }
             }
@@ -445,67 +560,11 @@
             document.getElementById('finalTime').textContent = Math.floor(gameState.time);
         }
 
-        function drawHighway() {
-            // Road background
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let lastSpawnTime = 0;
 
-            // Lane lines
-            ctx.strokeStyle = '#ffff00';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([20, 20]);
-            for (let i = 150; i < canvas.width; i += 150) {
-                ctx.beginPath();
-                ctx.moveTo(i, -50);
-                ctx.lineTo(i, canvas.height + 50);
-                ctx.stroke();
-            }
-            ctx.setLineDash([]);
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
 
-            // Road edges
-            ctx.strokeStyle = '#0f0';
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.moveTo(50, 0);
-            ctx.lineTo(50, canvas.height);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(canvas.width - 50, 0);
-            ctx.lineTo(canvas.width - 50, canvas.height);
-            ctx.stroke();
-        }
-
-        function drawPlayer() {
-            ctx.save();
-            if (player.boosting) {
-                ctx.shadowColor = '#ffff00';
-                ctx.shadowBlur = 20;
-            }
-            ctx.fillStyle = '#0f0';
-            ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
-            ctx.restore();
-
-            // Boost effect
-            if (player.boosting) {
-                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
-                ctx.fillRect(player.x - player.width / 2 - 10, player.y - player.height / 2 - 10, player.width + 20, player.height + 20);
-            }
-        }
-
-        function drawCars() {
-            for (let car of cars) {
-                ctx.fillStyle = car.color;
-                ctx.fillRect(car.x - car.width / 2, car.y - car.height / 2, car.width, car.height);
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(car.x - car.width / 2, car.y - car.height / 2, car.width, car.height);
-            }
-        }
-
-        function gameLoop(timestamp) {
             if (!gameState.gameRunning) return;
 
             if (!gameState.paused) {
@@ -515,19 +574,16 @@
                 updateCars();
                 checkCollisions();
 
-                if (Math.random() < 0.02 + (gameState.time / 500)) {
+                // Spawn new cars
+                if (gameState.time - lastSpawnTime > 0.8 - Math.min(0.5, gameState.time / 100)) {
                     spawnCar();
+                    lastSpawnTime = gameState.time;
                 }
 
                 updateHUD();
             }
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawHighway();
-            drawCars();
-            drawPlayer();
-
-            requestAnimationFrame(gameLoop);
+            renderer.render(scene, camera);
         }
 
         updateBoostUI();
