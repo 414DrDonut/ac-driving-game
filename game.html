@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Highway Dodging Arcade</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100vh;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            font-size: 24px;
+            color: #0f0;
+            text-shadow: 0 0 10px #0f0;
+            font-weight: bold;
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .hud-item {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border: 2px solid #0f0;
+        }
+
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 1000;
+        }
+
+        #gameOverScreen.show {
+            display: flex;
+        }
+
+        #gameOverScreen h1 {
+            color: #f00;
+            font-size: 72px;
+            margin-bottom: 30px;
+            text-shadow: 0 0 20px #f00;
+        }
+
+        #gameOverScreen .stat {
+            color: #0f0;
+            font-size: 32px;
+            margin: 15px;
+            text-shadow: 0 0 10px #0f0;
+        }
+
+        #gameOverScreen button {
+            margin-top: 40px;
+            padding: 15px 40px;
+            font-size: 28px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 5px;
+            pointer-events: auto;
+            transition: all 0.3s;
+        }
+
+        #gameOverScreen button:hover {
+            background: #0a0;
+            transform: scale(1.05);
+        }
+
+        #nameInputScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 1001;
+        }
+
+        #nameInputScreen h1 {
+            color: #0f0;
+            font-size: 48px;
+            margin-bottom: 40px;
+            text-shadow: 0 0 20px #0f0;
+        }
+
+        #nameInputScreen input {
+            padding: 15px 20px;
+            font-size: 24px;
+            width: 300px;
+            background: #1a1a1a;
+            color: #0f0;
+            border: 2px solid #0f0;
+            text-shadow: 0 0 10px #0f0;
+        }
+
+        #nameInputScreen input::placeholder {
+            color: #0a0;
+        }
+
+        #nameInputScreen button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 5px;
+            pointer-events: auto;
+            transition: all 0.3s;
+        }
+
+        #nameInputScreen button:hover {
+            background: #0a0;
+            transform: scale(1.05);
+        }
+
+        #pauseScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 999;
+        }
+
+        #pauseScreen.show {
+            display: flex;
+        }
+
+        #pauseScreen h1 {
+            color: #ff0;
+            font-size: 64px;
+            margin-bottom: 30px;
+            text-shadow: 0 0 20px #ff0;
+        }
+
+        #pauseScreen p {
+            color: #0f0;
+            font-size: 24px;
+            margin: 10px;
+            text-shadow: 0 0 10px #0f0;
+        }
+
+        .boost-bar {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .boost-slot {
+            width: 20px;
+            height: 20px;
+            background: #333;
+            border: 2px solid #0f0;
+        }
+
+        .boost-slot.active {
+            background: #ff0;
+            box-shadow: 0 0 10px #ff0;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border: 2px solid #0f0;
+            font-size: 16px;
+            color: #0f0;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui">
+        <div id="hud">
+            <div class="hud-item">Player: <span id="playerName">-</span></div>
+            <div class="hud-item">Score: <span id="score">0</span></div>
+            <div class="hud-item">Multiplier: <span id="multiplier">1.0x</span></div>
+            <div class="hud-item">Time: <span id="time">0</span>s</div>
+            <div class="hud-item">
+                Boosts: <span id="boostCount">3</span>
+                <div class="boost-bar" id="boostBar">
+                    <div class="boost-slot active"></div>
+                    <div class="boost-slot active"></div>
+                    <div class="boost-slot active"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <strong>CONTROLS:</strong><br>
+            ← / A, → / D: Move<br>
+            SPACE: Boost<br>
+            P: Pause<br>
+            R: Restart
+        </div>
+    </div>
+
+    <div id="nameInputScreen">
+        <h1>🏁 HIGHWAY DODGER 🏁</h1>
+        <input type="text" id="playerNameInput" placeholder="Enter your name..." maxlength="15">
+        <button onclick="startGame()">START GAME</button>
+    </div>
+
+    <div id="pauseScreen">
+        <h1>⏸ PAUSED ⏸</h1>
+        <p>Press P to Resume</p>
+    </div>
+
+    <div id="gameOverScreen">
+        <h1>💀 GAME OVER 💀</h1>
+        <div class="stat">Player: <span id="finalPlayerName">-</span></div>
+        <div class="stat">Final Score: <span id="finalScore">0</span></div>
+        <div class="stat">Multiplier: <span id="finalMultiplier">1.0x</span></div>
+        <div class="stat">Survival Time: <span id="finalTime">0</span>s</div>
+        <button onclick="location.reload()">PLAY AGAIN</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // Game State
+        let gameState = {
+            playerName: '',
+            score: 0,
+            multiplier: 1.0,
+            time: 0,
+            gameRunning: false,
+            paused: false,
+            boosts: 3,
+            maxBoosts: 3
+        };
+
+        // Player
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            width: 50,
+            height: 80,
+            speed: 6,
+            boosting: false,
+            boostTimer: 0
+        };
+
+        // Cars (enemies)
+        let cars = [];
+        let carIdCounter = 0;
+
+        // Input
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+
+            if (e.key === 'p' || e.key === 'P') {
+                gameState.paused = !gameState.paused;
+                document.getElementById('pauseScreen').classList.toggle('show');
+            }
+
+            if (e.key === 'r' || e.key === 'R') {
+                location.reload();
+            }
+
+            if (e.key === ' ') {
+                e.preventDefault();
+                if (gameState.boosts > 0 && gameState.gameRunning && !gameState.paused) {
+                    player.boosting = true;
+                    player.boostTimer = 150;
+                    gameState.boosts--;
+                    updateBoostUI();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        function startGame() {
+            const nameInput = document.getElementById('playerNameInput').value.trim();
+            if (nameInput === '') return;
+
+            gameState.playerName = nameInput;
+            document.getElementById('playerNameInput').value = '';
+            document.getElementById('nameInputScreen').style.display = 'none';
+
+            gameState.gameRunning = true;
+            gameState.score = 0;
+            gameState.multiplier = 1.0;
+            gameState.time = 0;
+            gameState.boosts = 3;
+            cars = [];
+
+            updateHUD();
+            gameLoop();
+        }
+
+        function updateHUD() {
+            document.getElementById('playerName').textContent = gameState.playerName;
+            document.getElementById('score').textContent = Math.floor(gameState.score);
+            document.getElementById('multiplier').textContent = gameState.multiplier.toFixed(1) + 'x';
+            document.getElementById('time').textContent = Math.floor(gameState.time);
+        }
+
+        function updateBoostUI() {
+            const bar = document.getElementById('boostBar');
+            bar.innerHTML = '';
+            for (let i = 0; i < gameState.maxBoosts; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'boost-slot' + (i < gameState.boosts ? ' active' : '');
+                bar.appendChild(slot);
+            }
+            document.getElementById('boostCount').textContent = gameState.boosts;
+        }
+
+        function spawnCar() {
+            const lanes = [100, 250, 400, 550, 700];
+            const lane = lanes[Math.floor(Math.random() * lanes.length)];
+            const speed = 3 + Math.random() * 4 + (gameState.time / 60);
+
+            cars.push({
+                id: carIdCounter++,
+                x: lane,
+                y: -100,
+                width: 50,
+                height: 80,
+                speed: speed,
+                color: `hsl(${Math.random() * 360}, 100%, 50%)`
+            });
+        }
+
+        function updatePlayer() {
+            const moveSpeed = player.boosting ? player.speed * 2.5 : player.speed;
+
+            if (keys['arrowleft'] || keys['a']) {
+                player.x -= moveSpeed;
+            }
+            if (keys['arrowright'] || keys['d']) {
+                player.x += moveSpeed;
+            }
+
+            player.x = Math.max(50, Math.min(canvas.width - 50, player.x));
+
+            if (player.boosting) {
+                player.boostTimer--;
+                if (player.boostTimer <= 0) {
+                    player.boosting = false;
+                }
+            }
+        }
+
+        function updateCars() {
+            for (let i = cars.length - 1; i >= 0; i--) {
+                cars[i].y += cars[i].speed;
+
+                if (cars[i].y > canvas.height) {
+                    cars.splice(i, 1);
+                    gameState.score += 10 * gameState.multiplier;
+                    gameState.multiplier = Math.min(2.0, gameState.multiplier + 0.05);
+                }
+            }
+        }
+
+        function checkCollisions() {
+            for (let car of cars) {
+                if (
+                    player.x < car.x + car.width &&
+                    player.x + player.width > car.x &&
+                    player.y < car.y + car.height &&
+                    player.y + player.height > car.y
+                ) {
+                    endGame();
+                }
+            }
+        }
+
+        function endGame() {
+            gameState.gameRunning = false;
+            document.getElementById('gameOverScreen').classList.add('show');
+            document.getElementById('finalPlayerName').textContent = gameState.playerName;
+            document.getElementById('finalScore').textContent = Math.floor(gameState.score);
+            document.getElementById('finalMultiplier').textContent = gameState.multiplier.toFixed(1) + 'x';
+            document.getElementById('finalTime').textContent = Math.floor(gameState.time);
+        }
+
+        function drawHighway() {
+            // Road background
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Lane lines
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([20, 20]);
+            for (let i = 150; i < canvas.width; i += 150) {
+                ctx.beginPath();
+                ctx.moveTo(i, -50);
+                ctx.lineTo(i, canvas.height + 50);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+
+            // Road edges
+            ctx.strokeStyle = '#0f0';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(50, 0);
+            ctx.lineTo(50, canvas.height);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(canvas.width - 50, 0);
+            ctx.lineTo(canvas.width - 50, canvas.height);
+            ctx.stroke();
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            if (player.boosting) {
+                ctx.shadowColor = '#ffff00';
+                ctx.shadowBlur = 20;
+            }
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
+            ctx.restore();
+
+            // Boost effect
+            if (player.boosting) {
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+                ctx.fillRect(player.x - player.width / 2 - 10, player.y - player.height / 2 - 10, player.width + 20, player.height + 20);
+            }
+        }
+
+        function drawCars() {
+            for (let car of cars) {
+                ctx.fillStyle = car.color;
+                ctx.fillRect(car.x - car.width / 2, car.y - car.height / 2, car.width, car.height);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(car.x - car.width / 2, car.y - car.height / 2, car.width, car.height);
+            }
+        }
+
+        function gameLoop(timestamp) {
+            if (!gameState.gameRunning) return;
+
+            if (!gameState.paused) {
+                gameState.time += 0.016;
+
+                updatePlayer();
+                updateCars();
+                checkCollisions();
+
+                if (Math.random() < 0.02 + (gameState.time / 500)) {
+                    spawnCar();
+                }
+
+                updateHUD();
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawHighway();
+            drawCars();
+            drawPlayer();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        updateBoostUI();
+    </script>
+</body>
+</html>
